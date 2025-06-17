@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 /* Master instance of OSPF structure. */
-extern struct ospf *ospf;
 
 // 初始化模块（在 OSPF 启动后调用）
 void idip_ospf_init(void);

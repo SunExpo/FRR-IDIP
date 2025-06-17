@@ -18,13 +18,11 @@
 #include "idip_opaque.h"
 #include "idip_ospf.h"
 
-// 外部全局变量（OSPF 实例）
-extern struct ospf *ospf;
 
 // 获取 OSPF 实例指针
 struct ospf *ospf_get_instance(void)
 {
-    return ospf;
+    return ospf_lookup(0, NULL);  // ✅ 默认 OSPF 实例
 }
 
 // 获取 Router-ID（uint32_t 形式）
@@ -72,6 +70,6 @@ int idip_receive_handler(const uint8_t *packet, size_t len)
 void idip_ospf_init(void)
 {
     idip_map_init();
-    idip_opaque_register();
+    // idip_opaque_register();
     zlog_info("IDIP 模块初始化完成");
 }
