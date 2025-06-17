@@ -2,42 +2,48 @@
 #include "log.h"
 #include "memory.h"
 
-#include "lib/if.h"             // for ifindex_t
-#include "lib/libospf.h"   // 推荐来源，含 OSPF_LS_INFINITY
-#include "ospfd/ospfd.h" // 若还需 OSPF_OPTION_DC
-
+#include "lib/if.h"             // ifindex_t
+#include "lib/libospf.h"        // OSPF_LS_INFINITY
+#include "ospfd/ospfd.h"        // struct ospf, OSPF_OPTION_DC
 #include "ospfd/ospf_lsa.h"
 #include "ospfd/ospf_opaque.h"
 
+#include <arpa/inet.h>          // inet_ntoa
+#include <netinet/in.h>         // struct in_addr
+#include <string.h>
 
-#include "lib/log.h"
-#include <arpa/inet.h>      // for inet_ntoa
-
+#include "idip.h"
 #include "idip_map.h"
 #include "idip_packet.h"
 #include "idip_opaque.h"
 #include "idip_ospf.h"
 
+// 外部全局变量（OSPF 实例）
+extern struct ospf *ospf;
 
-#include "idip.h"
-
-
-#include "log.h"
-#include <string.h>
-#include <netinet/in.h>
-
-uint32_t get_this_router_id(void)
+// 获取 OSPF 实例指针
+struct ospf *ospf_get_instance(void)
 {
-    struct ospf *o = ospf_get_instance();
-    return o ? o->router_id : 0;
+    return ospf;
 }
 
+// 获取 Router-ID（uint32_t 形式）
+uint32_t get_this_router_id_u32(void)
+{
+    struct ospf *o = ospf_get_instance();
+    return o ? o->router_id.s_addr : 0;
+}
 
-// 模拟本节点的逻辑 ID
+// 全局保存本节点 Router-ID（用 ID 表示）
+uint32_t this_router_id = 0;
 
 // 接收到封装数据包后的统一入口
-int idip_receive_handler(const uint8_t *packet, size_t len) {
-    uint32_t this_router_id = get_this_router_id();
+int idip_receive_handler(const uint8_t *packet, size_t len)
+{
+    // 延迟初始化 router-id（可以考虑改为启动时初始化）
+    if (this_router_id == 0)
+        this_router_id = get_this_router_id_u32();
+
     uint32_t src_id, dst_id;
     const uint8_t *payload;
     size_t payload_len;
@@ -51,8 +57,9 @@ int idip_receive_handler(const uint8_t *packet, size_t len) {
     } else {
         struct in_addr ip_next;
         if (id_to_ip_lookup(dst_id, &ip_next) == 0) {
-            zlog_info("IDIP: 中继转发目标 ID=%u 到 IP=%s", dst_id, inet_ntoa(ip_next));
-            // TODO: IP 转发调用
+            zlog_info("IDIP: 中继转发目标 ID=%u 到 IP=%s",
+                      dst_id, inet_ntoa(ip_next));
+            // TODO: IP 转发逻辑（暂未实现）
         } else {
             zlog_warn("IDIP: 未找到目标 ID=%u 的映射，丢弃", dst_id);
         }
@@ -61,8 +68,9 @@ int idip_receive_handler(const uint8_t *packet, size_t len) {
     return 0;
 }
 
-// IDIP 初始化入口（在 OSPF 启动后调用）
-void idip_ospf_init(void) {
+// IDIP 初始化入口（应在 OSPF 初始化之后调用）
+void idip_ospf_init(void)
+{
     idip_map_init();
     idip_opaque_register();
     zlog_info("IDIP 模块初始化完成");
